@@ -2,29 +2,122 @@
 title: "Projet Chamois"
 author: "MarineSouchier"
 date: "2022-11-11"
-output: html_document
+output: 
+  html_document:
+    toc: true
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r}
+rm(list=ls())
 ```
 
-## Bonjour
+## Chargement des librairies
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r}
+library(tidyverse)
+library(corrplot)
+library(ggplot2)
+library(lmerTest)
+library(ade4)
+library(dplyr)
+library(plyr)
+library(splines)
+library(car)
 ```
 
-## Including Plots
+## Prealable avant analyse statistique des donnees
+### Import des donnees
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+setwd("C:/Users/msouchier/Downloads")
+load('cham.Rdata')
+str(cham)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+### Creation des variables age et long et integration des deux variables dans le data frame cham2
+
+```{r}
+age<-cham$year-cham$coh
+long<-cham$ydth-cham$coh
+cham2<-cbind(cham, age, long)
+```
+
+## Question 1
+### Représentation graphique des données
+#### Représentation par classe d'age
+
+```{r}
+cham_age<-cham2 %>% 
+  group_by(age) %>%
+  dplyr::summarise(totnaissance= sum(fec), taillepop=n(), fecperind=totnaissance/n()*100)
+
+p1<-ggplot(cham_age, aes(x=age, y=fecperind)) + geom_bar(color="blue", fill=rgb(0.1,0.4,0.5,0.7), stat = "identity")
+p1<-p1 + labs(title = "Fécondité de la population en fonction de l'age",x="Age", y="Fécondité") + theme(plot.title = element_text(hjust = 0.5))
+p1 + geom_smooth()
+```
+
+
+#### Representation sans grouper par classe d'age pour identifier s'il existe un point d'inflexion
+
+```{r}
+p2<-ggplot(cham2, aes(x=age, y=fec)) + geom_jitter(width = 0.55, height = 0)
+p2<-p2 + labs(title = "Fécondité en fonction de l'age",x="Age", y="Fécondité") + theme(plot.title = element_text(hjust = 0.5))
+p2 + geom_smooth()
+```
+
+
+
+
+## Modelisation pour verifier s'il existe un lien entre la fécondité annuelle et l’âge de la femelle
+### Tests de modèles de régression lineaire generalise avec effets aléatoires
+
+## First {.tabset .tabset-fade .tabset-pills}
+
+```{r}
+glm1 <- glmer(fec ~ age + (1| id),data=cham2, family = binomial)
+summary(glm1)
+Anova(glm1)
+surdispersion_glm1 <- 1775/1325;surdispersion_glm1
+```
+AIC = 1775 et p-value = 0.27
+<br><br><br><br>
+Pas de surdispersion observee
+
+## Second
+```{r}
+glm2 <- glmer(fec ~ year + (1| id),data=cham2, family = binomial)
+summary(glm2)
+```
+
+## Third
+```{r}
+glm3 <- glmer(fec ~ age+ year + (1| id),data=cham2, family = binomial)
+summary(glm3)
+```
+
+## Four
+```{r}
+glm4 <- glmer(fec ~ age*year + (1| id),data=cham2, family = binomial)
+summary(glm4)
+```
+
+## Five
+```{r}
+glm5<- glmer(fec ~ age + (1| id) + (1| year),data=cham2, family = binomial)
+summary(glm5)
+Anova(glm5)
+#AIC = 1750 et p-value = 0.17
+surdispersion_glm5 <- 1750/1324;surdispersion_glm5
+```
+
+AIC = 1750 et p-value = 0.17
+<br><br><br><br>
+Pas de surdispersion observee
+
+## Question 2
+### Représentation graphique des données
+#### Representation fecondite par rapport à year pour verifier s'il existe un impact de la variable "year"
+
+```{r}
+p3<-ggplot(cham2, aes(x=year, y=fec)) + geom_jitter(width = 0.55, height = 0);p3
+```
