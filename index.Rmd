@@ -5,6 +5,7 @@ date: "2022-11-11"
 output: 
   html_document:
     toc: true
+    number_sections: TRUE
 ---
 
 ```{r}
@@ -58,6 +59,7 @@ p1 + geom_smooth()
 
 
 #### Representation sans grouper par classe d'age pour identifier s'il existe un point d'inflexion
+#####Representation avec la fonction jitter
 
 ```{r}
 p2<-ggplot(cham2, aes(x=age, y=fec)) + geom_jitter(width = 0.55, height = 0)
@@ -66,47 +68,54 @@ p2 + geom_smooth()
 ```
 
 
+#####Representation avec la fonction geom_count
 
+```{r}
+p2bis<-ggplot(cham2, aes(x=age, y=fec)) + geom_count()
+p2bis<-p2bis + labs(title = "Fécondité en fonction de l'age",x="Age", y="Fécondité") + theme(plot.title = element_text(hjust = 0.5))
+p2bis + geom_smooth()
+```
 
 ## Modelisation pour verifier s'il existe un lien entre la fécondité annuelle et l’âge de la femelle
-### Tests de modèles de régression lineaire generalise avec effets aléatoires
+### Tests de modèles de régression lineaire generalise avec effets aléatoires {.tabset .tabset-fade .tabset-pills}
 
-## First {.tabset .tabset-fade .tabset-pills}
+***
 
+#### First
 ```{r}
 glm1 <- glmer(fec ~ age + (1| id),data=cham2, family = binomial)
 summary(glm1)
 Anova(glm1)
 surdispersion_glm1 <- 1775/1325;surdispersion_glm1
 ```
+
 AIC = 1775 et p-value = 0.27
 <br><br><br><br>
 Pas de surdispersion observee
 
-## Second
+#### Second
 ```{r}
 glm2 <- glmer(fec ~ year + (1| id),data=cham2, family = binomial)
 summary(glm2)
 ```
 
-## Third
+#### Third
 ```{r}
 glm3 <- glmer(fec ~ age+ year + (1| id),data=cham2, family = binomial)
 summary(glm3)
 ```
 
-## Four
+#### Four
 ```{r}
 glm4 <- glmer(fec ~ age*year + (1| id),data=cham2, family = binomial)
 summary(glm4)
 ```
 
-## Five
+#### Five
 ```{r}
 glm5<- glmer(fec ~ age + (1| id) + (1| year),data=cham2, family = binomial)
 summary(glm5)
 Anova(glm5)
-#AIC = 1750 et p-value = 0.17
 surdispersion_glm5 <- 1750/1324;surdispersion_glm5
 ```
 
@@ -114,10 +123,92 @@ AIC = 1750 et p-value = 0.17
 <br><br><br><br>
 Pas de surdispersion observee
 
+
 ## Question 2
 ### Représentation graphique des données
-#### Representation fecondite par rapport à year pour verifier s'il existe un impact de la variable "year"
+#### Création tableau de la fécondité moyenne par année 
 
 ```{r}
-p3<-ggplot(cham2, aes(x=year, y=fec)) + geom_jitter(width = 0.55, height = 0);p3
+cham_ans = cham2 %>% 
+  group_by(year) %>% 
+  dplyr::summarise(totnaissance= sum(fec), taillepop=n(), agemoyen=mean(age)) %>% 
+  mutate(fecperind=totnaissance/taillepop)%>% 
+  mutate(ratiofecage=fecperind/agemoyen)
 ```
+
+#### Représentation graphique sans grouper par annee
+
+```{r out.width=c('33%', '33%', '33%'), fig.show='hold'}
+p3<-ggplot(cham2, aes(x=year, y=fec)) + geom_jitter(width = 0.55, height = 0);p3
+p3bis<-ggplot(cham2, aes(x=year, y=fec)) + geom_count()
+p3bis<-p3bis + labs(title = "Fécondité en fonction des annees",x="Anees", y="Fécondité") + theme(plot.title = element_text(hjust = 0.5)); p3bis
+p4<-ggplot(data = cham_ans, aes(x = year,y=agemoyen))+geom_point(); p4
+```
+
+#### Représentation graphique par annee
+
+```{r out.width=c('50%', '50%'), fig.show='hold'}
+p5<-ggplot(cham_ans, aes(x=year, y=fecperind)) + geom_bar(color="blue", fill=rgb(0.1,0.4,0.5,0.7), stat = "identity"); p5
+p5 + geom_smooth() 
+p6<-ggplot(data = cham_ans, aes(x = year,y=agemoyen))+geom_point(); p6
+```
+
+## Modelisation pour verifier s'il existe un lien entre la fécondité annuelle et le temps
+### Tests de modèles de régression lineaire generalise avec effets aléatoires
+#### Modele GLM fecondite en fonction de l'annee
+```{r}
+glm6 <- glmer(fec ~ year + (1| id),data=cham2, family = binomial)
+summary(glm6)
+```
+
+#### Transformation de la variable year en variable normee reduite
+
+```{r}
+year_scale<-scale(cham2$year, center=TRUE, scale= TRUE)
+```
+
+#### Test à nouveau des modeles GLM
+
+```{r}
+glm7 <- glmer(fec ~ year_scale + (1| id),data=cham2, family = binomial)
+summary(glm7)
+surdispersion_glm7 <- 1776/1325;surdispersion_glm7
+```
+
+AIC = 1776 et p-value = 0.78
+<br><br><br><br>
+Pas de surdispersion observee
+
+```{r}
+glm8 <- glmer(fec ~ year_scale+age + (1| id),data=cham2, family = binomial)
+summary(glm8)
+surdispersion_glm8 <- 1777/1324;surdispersion_glm8
+```
+```{r}
+glm9 <- glmer(fec ~ year_scale*age + (1| id),data=cham2, family = binomial)
+summary(glm9)
+surdispersion_glm9 <- 1779/1323;surdispersion_glm9
+```
+## Question 3
+### Représentation graphique des données
+#### Création tableau de la fécondité totale par chamois
+
+```{r}
+cham_id = cham2 %>% 
+  group_by(id) %>% 
+  dplyr::summarise(feconditetotale= sum(fec), long=long, anneetot=(ydth-min(year)+1)) %>%
+  unique()%>%
+  mutate(fecrelative=feconditetotale/anneetot)%>%
+  drop_na(long)
+```
+#### Représentation graphique par id
+
+```{r out.width=c('50%', '50%'), fig.show='hold'}
+p7<-ggplot(cham_id, aes(x=long, y=feconditetotale)) + geom_bar(color="blue", fill=rgb(0.1,0.4,0.5,0.7), stat = "identity"); p7
+p7 + geom_smooth() 
+p8<-ggplot(data = cham_id, aes(x=long, y=fecrelative))+geom_bar(color="blue", fill=rgb(0.1,0.4,0.5,0.7), stat = "identity"); p8
+p9<-ggplot(cham_id, aes(x=long, y=feconditetotale)) + geom_count(); p9
+p10<-ggplot(cham_id, aes(x=long, y=feconditetotale)) + geom_jitter(width = 0.25, height = 0.25)+ geom_smooth(); p10
+```
+
+
