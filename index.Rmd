@@ -14,14 +14,11 @@ rm(list=ls())
 
 ## Chargement des librairies
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 library(tidyverse)
 library(corrplot)
-library(ggplot2)
 library(lmerTest)
 library(ade4)
-library(dplyr)
-library(plyr)
 library(splines)
 library(car)
 ```
@@ -30,7 +27,7 @@ library(car)
 ### Import des donnees
 
 ```{r}
-setwd("C:/Users/msouchier/Downloads")
+setwd(".")
 load('cham.Rdata')
 str(cham)
 ```
