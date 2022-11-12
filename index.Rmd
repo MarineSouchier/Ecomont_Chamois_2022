@@ -8,11 +8,13 @@ output:
     number_sections: TRUE
 ---
 
+
 ```{r}
 rm(list=ls())
 ```
 
-## Chargement des librairies
+# Chargement des librairies
+***
 
 ```{r message=FALSE, warning=FALSE}
 library(tidyverse)
@@ -21,10 +23,13 @@ library(lmerTest)
 library(ade4)
 library(splines)
 library(car)
+library(plotly)
 ```
 
-## Prealable avant analyse statistique des donnees
-### Import des donnees
+# Prealable avant analyse statistique des donnees
+***
+
+## Import des donnees
 
 ```{r}
 setwd(".")
@@ -32,7 +37,7 @@ load('cham.Rdata')
 str(cham)
 ```
 
-### Creation des variables age et long et integration des deux variables dans le data frame cham2
+## Creation des variables age et long et integration des deux variables dans le data frame cham2
 
 ```{r}
 age<-cham$year-cham$coh
@@ -49,9 +54,12 @@ cham_age<-cham2 %>%
   group_by(age) %>%
   dplyr::summarise(totnaissance= sum(fec), taillepop=n(), fecperind=totnaissance/n()*100)
 
-p1<-ggplot(cham_age, aes(x=age, y=fecperind)) + geom_bar(color="blue", fill=rgb(0.1,0.4,0.5,0.7), stat = "identity")
-p1<-p1 + labs(title = "Fécondité de la population en fonction de l'age",x="Age", y="Fécondité") + theme(plot.title = element_text(hjust = 0.5))
-p1 + geom_smooth()
+plot1 <- ggplot(cham_age, aes(x=age, y=fecperind)) + 
+    geom_bar(color="blue", fill=rgb(0.1,0.4,0.5,0.7), stat = "identity") + 
+    labs(title = "Fécondité de la population en fonction de l'age",x="Age", y="Fécondité") + 
+    theme(plot.title = element_text(hjust = 0.5)) + 
+    geom_smooth()
+ggplotly(plot1)
 ```
 
 
