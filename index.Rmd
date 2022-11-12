@@ -1,11 +1,9 @@
 ---
-title: "Projet Chamois"
-author: "MarineSouchier"
-date: "2022-11-11"
+title: ""
+date: "`r Sys.Date()`"
 output: 
-  html_document:
-    toc: true
-    number_sections: TRUE
+  rmdformats::readthedown:
+    highlight: kate
 ---
 
 
@@ -24,6 +22,7 @@ library(ade4)
 library(splines)
 library(car)
 library(plotly)
+library(DT)
 ```
 
 # Prealable avant analyse statistique des donnees
@@ -34,7 +33,7 @@ library(plotly)
 ```{r}
 setwd(".")
 load('cham.Rdata')
-str(cham)
+datatable(cham, rownames = FALSE, filter="top", options = list(pageLength = 5, scrollX=T) )
 ```
 
 ## Creation des variables age et long et integration des deux variables dans le data frame cham2
