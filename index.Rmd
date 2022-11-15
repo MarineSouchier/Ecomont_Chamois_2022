@@ -21,6 +21,7 @@ library(splines)
 library(car)
 library(plotly)
 library(DT)
+library(Hmisc)
 ```
 
 # Prealable
@@ -33,13 +34,21 @@ setwd(".")
 load('cham.Rdata')
 datatable(cham, rownames = FALSE, filter="top", options = list(pageLength = 5, scrollX=T) )
 ```
+## Elimination des donnees aberrantes
+
+Les chamois observés après leur mort ou avant leur naissance sont retirés du jeu de donnees.
+
+```{r}
+cham <- cham[cham$year<=cham$ydth,]
+cham <- cham[cham$year>=cham$coh,]
+```
+
 
 ## Creation des variables age et longevite (long)
 
 ```{r}
-age<-cham$year-cham$coh
-long<-cham$ydth-cham$coh
-cham2<-cbind(cham, age, long)
+cham2 <- cham %>%
+  summarise(cham, age= year-coh, long=ydth-coh)
 ```
 
 # Lien fecondite annuelle et age des femelles
@@ -48,13 +57,15 @@ cham2<-cbind(cham, age, long)
 ### Représentation par classe d'age
 
 ```{r message=FALSE, warning=FALSE}
-cham_age<-cham2 %>% 
+cham_age <- cham2 %>% 
   group_by(age) %>%
-  dplyr::summarise(totnaissance= sum(fec), taillepop=n(), fecperind=totnaissance/n()*100)
+  dplyr::summarise(totnaissance= sum(fec), taillepop=n(), fecmean=totnaissance/n())
 
-plot1 <- ggplot(cham_age, aes(x=age, y=fecperind)) + 
+cham_age$fecmean <- round(cham_age$fecmean, 2)
+
+  plot1 <- ggplot(cham_age, aes(x=age, y=fecmean)) + 
     geom_bar(color="blue", fill=rgb(0.1,0.4,0.5,0.7), stat = "identity") + 
-    labs(title = "Fécondité de la population en fonction de l'age",x="Age", y="Fécondité annuelle de la population") + 
+    labs(title = "Fécondité moyenne de la population en fonction de l'age",x="Age", y="Fécondité moyenne de la population") + 
     theme(plot.title = element_text(hjust = 0.5)) + 
     geom_smooth()
 ggplotly(plot1)
@@ -67,7 +78,7 @@ ggplotly(plot1)
 ```{r message=FALSE, warning=FALSE}
 plot2 <- ggplot(cham2, aes(x=age, y=fec)) + 
     geom_jitter(width = 0.55, height = 0) + 
-    labs(title = "Fécondité en fonction de l'age",x="Age", y="Fécondité") +
+    labs(title = "Fécondité annuelle en fonction de l'age",x="Age", y="Fécondité annuelle") +
     theme(plot.title = element_text(hjust = 0.5)) + 
     geom_smooth()
 ggplotly(plot2)
@@ -79,9 +90,9 @@ ggplotly(plot2)
 ```{r message=FALSE, warning=FALSE}
 plot3 <- ggplot(cham2, aes(x=age, y=fec)) +
     geom_count() + 
-    labs(title = "Fécondité en fonction de l'age",x="Age", y="Fécondité")+
-    theme(plot.title = element_text(hjust = 0.5))
-ggplotly(plot3)
+    labs(title = "Fécondité annuelle en fonction de l'age",x="Age", y="Fécondité annuelle")+
+    theme(plot.title = element_text(hjust = 0.5))+
+    geom_smooth(); plot3
 ```
 
 ## Analyse statistique du lien entre fecondite annuelle et l'age des femelles 
@@ -90,46 +101,53 @@ ggplotly(plot3)
 ***
 
 #### First
+Le premier modele applique un modele glm1 qui utilise la fonction de lien binomiale et la variable "id" comme effet aléatoire pour prendre en compte le fait que les observations sont repetees sur les mêmes individus sur plusieurs annees.
 ```{r}
 glm1 <- glmer(fec ~ age + (1| id),data=cham2, family = binomial)
 summary(glm1)
 Anova(glm1)
-surdispersion_glm1 <- 1775/1325;surdispersion_glm1
+surdispersion_glm1 <- 1212/906;surdispersion_glm1
 ```
 
-AIC = 1775 et p-value = 0.27.
-<br><br><br><br>
-Pas de surdispersion observee.
+Interpretation des coefficients:
+```{r}
+summary(glm1)$coefficients
+exp(summary(glm1)$coefficients[2])
+Coeff <- ((1/exp(summary(glm1)$coefficients[2]))-1)*100
+```
+Avec le modele glm1, AIC/df = 1.3 donc il n'y a pas de surdispersion observee.
+Il est `r Coeff`% moins vraisemblable que les chamois aient un petit lorsque leur age augmente d'un an (p-value = 0.0152).
+
 
 #### Second
+On ajoute la variable "year" en effet additif ou multiplicatif car il pourrait y avoir un effet "annee" dans la tendance observee sur la fecondite annuelle.
 ```{r}
-glm2 <- glmer(fec ~ year + (1| id),data=cham2, family = binomial)
-summary(glm2)
+glm2 <- glmer(fec ~ age+ year + (1| id),data=cham2, family = binomial)
 ```
 
-#### Third
+La variable "year" doit être centree normee pour pouvoir faire converger le modele.
 ```{r}
-glm3 <- glmer(fec ~ age+ year + (1| id),data=cham2, family = binomial)
+year_scale<-scale(cham2$year, center=TRUE, scale= TRUE)
+glm2 <- glmer(fec ~ age+ year_scale + (1| id),data=cham2, family = binomial)
+summary(glm2)
+
+glm3 <- glmer(fec ~ age*year_scale + (1| id),data=cham2, family = binomial)
 summary(glm3)
 ```
+On n'observe pas de surdispersion pour les deux modeles testes.
+Que ce soit en effet mutiplicatif ou additif, la variable "year" n'a pas un effet significatif en addition à la variable "age" (p value > 0.1 en effet additif et multiplicatif).
+La variable "age" a un effet plus marque que la variable "year" avec une p value proche de 0.5.
 
-#### Fourth
+
+#### Third
+Test du modele avec deux effets aleatoires (variables "id" et "year")
 ```{r}
-glm4 <- glmer(fec ~ age*year + (1| id),data=cham2, family = binomial)
+glm4<- glmer(fec ~ age + (1| id) + (1| year),data=cham2, family = binomial)
 summary(glm4)
+Anova(glm4)
+surdispersion_glm4 <- 1212/905;surdispersion_glm4
 ```
-
-#### Fifth
-```{r}
-glm5<- glmer(fec ~ age + (1| id) + (1| year),data=cham2, family = binomial)
-summary(glm5)
-Anova(glm5)
-surdispersion_glm5 <- 1750/1324;surdispersion_glm5
-```
-
-AIC = 1750 et p-value = 0.17.
-<br><br><br><br>
-Pas de surdispersion observee.
+Les resultats du modele glm4 sont similaires à ceux du modele glm1 (AIC, df, p value et coefficients similaires) donc le fait d'ajouter la variable "year" comme effets aléatoires n'apportent pas plus d'explication sur la variance observee.
 
 
 # Variation de la fecondite annuelle en fonction du temps
@@ -141,43 +159,46 @@ Pas de surdispersion observee.
 cham_ans = cham2 %>% 
   group_by(year) %>% 
   dplyr::summarise(totnaissance= sum(fec), taillepop=n(), agemoyen=mean(age)) %>% 
-  mutate(fecperind=totnaissance/taillepop)%>% 
-  mutate(ratiofecage=fecperind/agemoyen)
+  mutate(fecperan=totnaissance/taillepop)
+cham_ans$fecperan <- round(cham_ans$fecperan, 2)
 ```
 
 
 ```{r out.width=c('50%', '50%'), fig.show='hold',message=FALSE, warning=FALSE}
-plot4 <- ggplot(cham_ans, aes(x=year, y=fecperind)) +
+plot4 <- ggplot(cham_ans, aes(x=year, y=fecperan)) +
     geom_bar(color="blue", fill=rgb(0.1,0.4,0.5,0.7), stat = "identity") + 
-    labs(title = "Fécondité de la population en fonction des annees",x="Annees", y="Fécondité annuelle de la population") +
+    labs(title = "Fécondité moyenne de la population en fonction des annees",x="Annees", y="Fécondité moyenne") +
     theme(plot.title = element_text(hjust = 0.5)) +
     geom_smooth(); plot4
 
 plot5 <- ggplot(data = cham_ans, aes(x = year,y=agemoyen))+
-     labs(title = "Age de la population en fonction des annees",x="Annees", y="Age moyen") +
+     labs(title = "Age moyen de la population en fonction des annees",x="Annees", y="Age moyen") +
     theme(plot.title = element_text(hjust = 0.5)) +
-    geom_point(); plot5
+    geom_point()+
+    geom_smooth(); plot5
 ```
 
 ### Représentation graphique sans grouper par annee
 
 ```{r out.width=c('33%', '33%', '33%'), fig.show='hold', message=FALSE, warning=FALSE}
 plot6 <- ggplot(cham2, aes(x=year, y=fec)) + 
-    labs(title = "Fécondité en fonction des annees",x="Annees", y="Fécondité") +
+    labs(title = "Fécondité annuelle en fonction des annees",x="Annees", y="Fécondité annuelle") +
     geom_jitter(width = 0.55, height = 0) +
+    geom_smooth()+
     theme(plot.title = element_text(hjust = 0.5)); plot6
 
 plot7 <- ggplot(cham2, aes(x=year, y=fec)) + 
     geom_count() + 
-    labs(title = "Fécondité en fonction des annees",x="Annees", y="Fécondité") +
-    theme(plot.title = element_text(hjust = 0.5)); plot7
+    labs(title = "Fécondité annuelle en fonction des annees",x="Annees", y="Fécondité annuelle") +
+    theme(plot.title = element_text(hjust = 0.5))+
+    geom_smooth(); plot7
 
 plot8 <- ggplot(data = cham_ans, aes(x = year,y=agemoyen))+
-   labs(title = "Age de la population en fonction des annees",x="Annees", y="Age moyen") +
+   labs(title = "Age moyen de la population en fonction des annees",x="Annees", y="Age moyen") +
     theme(plot.title = element_text(hjust = 0.5)) +
-    geom_point(); plot8
+    geom_point()+
+    geom_smooth(); plot8
 ```
-
 
 ## Analyse statistique du lien entre fécondité annuelle et temps
 ### Modèles de régression lineaire generalise avec effets aléatoires {.tabset .tabset-fade .tabset-pills}
@@ -185,86 +206,65 @@ plot8 <- ggplot(data = cham_ans, aes(x = year,y=agemoyen))+
 ***
 
 #### First
+Le premier modele applique un modele glm5 qui utilise la fonction de lien binomiale et la variable "id" comme effet aléatoire pour prendre en compte le fait que les observations sont repetees sur les mêmes individus sur plusieurs annees.
 
 ```{r}
-glm6 <- glmer(fec ~ year + (1| id),data=cham2, family = binomial)
-summary(glm6)
+glm5 <- glmer(fec ~ year_scale + (1| id),data=cham2, family = binomial)
+summary(glm5)
+Anova(glm5)
+surdispersion_glm5 <- 1214/906;surdispersion_glm5
 ```
-
-#### Second
-
-Transformation de la variable year en variable normee reduite
+Pas de surdispersion observee. 
+D'apres la p-value<0.05, il y a aurait un effet significatif de la variable "year" sur la fecondite annuelle.
+Or, graphiquement, l'effet de la variable "year" semble negligeable.
+On se rend compte que l'age moyen de la population augmente avec les annees et on sait grace au modele glm1 que la variable "age" a un effet significatif sur la fecondite annuelle.
+Ainsi, il est important de regarder le modele glm3 qui presente les effets multiplicatids "year" et "age".
 ```{r}
-year_scale<-scale(cham2$year, center=TRUE, scale= TRUE)
+glm3 <- glmer(fec ~ age*year_scale + (1| id),data=cham2, family = binomial)
+summary(glm3)
 ```
+La variable "age" a un effet avec une p value proche de 0.5 alors que les p value associees à la variable "year" et aux effets multiplicatifs ne sont pas significatifs (p valu>0.1).
+La variable "year" n'a donc pas d'effet significatif sur la fecondite annuelle des chamois.
 
 
-```{r}
-glm7 <- glmer(fec ~ year_scale + (1| id),data=cham2, family = binomial)
-summary(glm7)
-surdispersion_glm7 <- 1776/1325;surdispersion_glm7
-```
 
-AIC = 1776 et p-value = 0.78.
-<br><br><br><br>
-Pas de surdispersion observee.
 
-#### Third
-
-```{r}
-glm8 <- glmer(fec ~ year_scale+age + (1| id),data=cham2, family = binomial)
-summary(glm8)
-surdispersion_glm8 <- 1777/1324;surdispersion_glm8
-```
-
-#### Fourth
-```{r}
-glm9 <- glmer(fec ~ year_scale*age + (1| id),data=cham2, family = binomial)
-summary(glm9)
-surdispersion_glm9 <- 1779/1323;surdispersion_glm9
-```
 
 
 # Lien entre fecondite totale et longevite des animaux
 ***
 ## Représentation graphique des données
-### Representation de la fecondite totale par annee
 
 ```{r message=FALSE, warning=FALSE}
 cham_id = cham2 %>% 
   group_by(id) %>% 
   dplyr::summarise(feconditetotale= sum(fec), long=long, pds=pds, anneetot=(ydth-min(year)+1), MinAn=min(year), MaxAn=max(year), AgePds=min(age)) %>%
   unique()%>%
-  mutate(fecrelative=feconditetotale/anneetot)%>%
+  mutate(fectotrelative=feconditetotale/anneetot)%>%
   drop_na(long)
 ```
 
-
-```{r out.width=c('50%', '50%'), fig.show='hold',message=FALSE, warning=FALSE}
-plot9 <- ggplot(cham_id, aes(x=long, y=feconditetotale)) +
-    geom_point(color="blue", fill=rgb(0.1,0.4,0.5,0.7)) + 
-     labs(title = "Fecondite totale en fonction de la longevite",x="Longevite", y="Fecondite totale") +
+```{r out.width=c('50%', '50%'), fig.show='hold', message=FALSE, warning=FALSE}
+plot9 <-ggplot(cham_id, aes(x=long, y=feconditetotale)) +
+    geom_count() +
+    labs(title = "Fecondite totale en fonction de la longevite",x="Longevite", y="Fecondite totale") +
     theme(plot.title = element_text(hjust = 0.5)) +
     geom_smooth(); plot9
-ggplotly(plot9)
 
-plot10 <- ggplot(data = cham_id, aes(x=long, y=fecrelative))+
+plot10 <- ggplot(cham_id, aes(x=long, y=feconditetotale)) +
+    geom_jitter(width = 0.25, height = 0.25)+
+     labs(title = "Fecondite totale en fonction de la longevite",x="Longevite", y="Fecondite totale") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    geom_smooth(); plot10
+```
+Tous les chamois n'ont pas été suivis le même nombre d'annee. Pour prendre en compte ce biais dans la fecondite totale des chamois, la fecondite totale a ete divisee par le nombre d'annees de suivi.
+
+```{r out.width=c('50%','50%'), fig.show='hold',message=FALSE, warning=FALSE}
+plot11 <- ggplot(data = cham_id, aes(x=long, y=fectotrelative))+
     geom_point(color="blue", fill=rgb(0.1,0.4,0.5,0.7)) +
     labs(title = "Fecondite sur le nombre d'annees suivies en fonction de la longevite",x="Longevite", y="Fecondite relative au nombre d'annees suivies") +
     geom_smooth() +
-    theme(plot.title = element_text(hjust = 0.5)); plot10
-```
-
-```{r out.width=c('50%', '50%'), fig.show='hold', message=FALSE, warning=FALSE}
-plot11 <-ggplot(cham_id, aes(x=long, y=feconditetotale)) +
-    geom_count() +
-    geom_smooth()
-ggplotly(plot11)
-
-plot12 <- ggplot(cham_id, aes(x=long, y=feconditetotale)) +
-    geom_jitter(width = 0.25, height = 0.25)+
-    geom_smooth()
-ggplotly(plot12)
+    theme(plot.title = element_text(hjust = 0.5)); plot11
 ```
 
 ## Analyse statistique du lien entre la fécondité annuelle et la longevite
@@ -272,77 +272,87 @@ ggplotly(plot12)
 
 ***
 
-#### First
+#### First => Voir avec Karim pour questions. Pas l'impression de pouvoir deduire de relation quand prise en compte du nombre d'annees de suivi dans la relation
 
 ```{r}
-lm1 <- lm(feconditetotale~long, data = cham_id)
-summary(lm1)
-plot(lm1)
-hist(resid(lm1))
+test1 <- lm(feconditetotale~long, data = cham_id)
+summary(test1)
+plot(test1)
+hist(resid(test1))
+#Non homogeneite des residus
 
-lm2 <- lm(feconditetotale~log(long), data = cham_id)
-summary(lm2)
-plot(lm2)
+test2 <- lm(feconditetotale~log(long), data = cham_id)
+summary(test2)
+plot(test2)
+#Non homogeneite des residus
 
-lm2bis <- lm(sqrt(feconditetotale)~long, data = cham_id)
-summary(lm2bis)
-plot(lm2bis)
+test3 <- lm(sqrt(feconditetotale)~long, data = cham_id)
+summary(test3)
+plot(test3)
+#Non homogeneite des residus
 
 cham_id2 <- cham_id[cham_id$feconditetotale!=0,]
-lm3 <- lm(log(feconditetotale)~(log(long)), data = cham_id2)
-summary(lm3)
-plot(lm3)
+test4 <- lm(log(feconditetotale)~(log(long)), data = cham_id2)
+summary(test4)
+plot(test4)
+#Non homogeneite des residus
 
-lm4 <- lm(log(feconditetotale+1)~(long), data = cham_id2)
-summary(lm4)
-plot(lm4)
+test5 <- lm(log(feconditetotale+1)~(long), data = cham_id2)
+summary(test5)
+plot(test5)
+#Non homogeneite des residus
 
-lm6 <- lm(fecrelative~long, data = cham_id)
-summary(lm6)
-plot(lm6)
+test6 <- lm(fectotrelative~long, data = cham_id)
+summary(test6)
+plot(test6)
+#Non homogeneite des residus
 
-lm6 <- lm(log(fecrelative)~long, data = cham_id2)
-summary(lm6)
-plot(lm6)
+test7 <- lm(log(fectotrelative)~long, data = cham_id2)
+summary(test7)
+plot(test7)
 
-glm9 <- glm(data=cham_id, feconditetotale~long, family="poisson")
-summary(glm9)
+test8 <- glm(data=cham_id, feconditetotale~long, family="poisson")
+summary(test8)
 
-glm10 <- glm(data=cham_id, feconditetotale~long, family="quasipoisson")
-summary(glm10)
+test9 <- glm(data=cham_id, fectotrelative~long, family="quasipoisson")
+summary(test9)
+
 ```
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Lien entre fecondite annuelle et longevite des animaux
 ***
 
 ## Représentation graphique des données
 
+
 ```{r message=FALSE, warning=FALSE}
-plot10 <- ggplot(cham2, aes(x=long, y=fec)) +
+plot12 <- ggplot(cham2, aes(x=long, y=fec)) +
     geom_count() + 
-    labs(title = "Fécondité en fonction de la longevite",x="Longevite", y="Fécondité")+
-    theme(plot.title = element_text(hjust = 0.5)); plot10
+    labs(title = "Fécondité annuelle en fonction de la longevite",x="Longevite", y="Fécondité annuelle")+
+    geom_smooth()+
+    theme(plot.title = element_text(hjust = 0.5)); plot12
 ```
 
 ```{r message=FALSE, warning=FALSE}
-plot14 <- ggplot(cham2, aes(x=long, y=fec)) +
-    geom_count() + 
-    labs(title = "Fécondité en fonction de la longevite",x="Longevite", y="Fécondité")+
-    theme(plot.title = element_text(hjust = 0.5)); plot10
+plot13 <- ggplot(cham2, aes(x=long, y=fec)) +
+    geom_jitter(width = 0.55, height=0) + 
+    labs(title = "Fécondité annuelle en fonction de la longevite",x="Longevite", y="Fécondité annuelle")+
+    geom_smooth()+
+    theme(plot.title = element_text(hjust = 0.5)); plot13
 ```
 
-```{r message=FALSE, warning=FALSE}
-cham_long<-cham2 %>% 
-  group_by(long) %>%
-  dplyr::summarise(totnaissance= sum(fec), taillepop=n())
-
-plot15 <- ggplot(cham_long, aes(x=long, y=totnaissance/taillepop*100)) + 
-    geom_bar(color="blue", fill=rgb(0.1,0.4,0.5,0.7), stat = "identity") + 
-    labs(title = "Fécondité de la population en fonction de la longevite",x="Longevite", y="Fécondité annuelle de la population") + 
-    theme(plot.title = element_text(hjust = 0.5)) + 
-    geom_smooth()
-ggplotly(plot15)
-```
 ## Analyse statistique du lien entre fecondite annuelle et longevite des femelles 
 ### Modèles de régression lineaire generalise avec effets aléatoires {.tabset .tabset-fade .tabset-pills}
 
@@ -355,34 +365,99 @@ glm11 <- glmer(fec ~ long + (1| id),data=cham2, family = binomial)
 summary(glm11)
 Anova(glm11)
 ```
+Pas de surdispersion. 
+Pas d'effets significatifs observes de la variable "longevite" sur la fecondite annuelle (p value > 0.05)
+
+#### Second => voir avec Karim la pertinence de segmenter en deux la variable
+
+Graphiquement, une courbe concave se dessine donc on segmente la variable "longevite" en deux segments pour tester la relation longevite/fecondite annuelle sur les deux segments.
+```{r}
+cham_long1 <- cham2[cham2$long<15,]
+cham_long2 <- cham2[cham2$long>=15,]
+
+plot16 <- ggplot(cham_long1, aes(x=long, y=fec)) +
+    geom_count() + 
+    labs(title = "Fécondité en fonction de la longevite",x="Longevite", y="Fécondité")+
+    geom_smooth()+
+    theme(plot.title = element_text(hjust = 0.5)); plot16
+
+glm12 <- glmer(fec ~ long + (1| id),data=cham_long1, family = binomial)
+summary(glm12)
+Anova(glm12)
+
+plot17 <- ggplot(cham_long2, aes(x=long, y=fec)) +
+    geom_count() + 
+    labs(title = "Fécondité en fonction de la longevite",x="Longevite", y="Fécondité")+
+    geom_smooth()+
+    theme(plot.title = element_text(hjust = 0.5)); plot17
+
+glm13 <- glmer(fec ~ long + (1| id),data=cham_long2, family = binomial)
+summary(glm13)
+Anova(glm13)
+```
+
 
 # Lien entre fecondite totale et poids
 ***
 
 ## Représentation graphique des données
+### Vérification de la comparabilite des poids selon les ages de capture
 
 ```{r message=FALSE, warning=FALSE}
-plot15 <- ggplot(cham_id, aes(x=AgePds, y=pds)) + 
+plot18 <- ggplot(cham_id, aes(x=AgePds, y=pds)) + 
     geom_point(color="blue", fill=rgb(0.1,0.4,0.5,0.7)) + 
-    geom_smooth();plot15
+    labs(title = "Poids selon l'age de capture",x="Age de capture", y="Poids mesuré")+
+    theme(plot.title = element_text(hjust = 0.5))+
+    geom_smooth();plot18
 ```
 
-```{r}
-lm13 <- lm(pds ~ AgePds,data=cham_id)
-summary(lm13)
+On observe un impact fort de l'age sur le poids pour les ages faibles.
+On retire les outliers et on conserve les donnees situees dans l'intervalle de confiance à 99%.
 
-cham_id3 <- cham_id[cham_id$AgePds>3,]
-lm14 <- lm(pds ~ AgePds,data=cham_id3)
+```{r message=FALSE, warning=FALSE}
+cham_pds <- cham_id[which(cham_id$pds!="NA"),]
+borninf = mean(cham_pds$pds)-3*(sd(cham_pds$pds)/sqrt(length(cham_pds$pds)))
+borninf
+bornsup = mean(cham_pds$pds)+3*(sd(cham_pds$pds)/sqrt(length(cham_pds$pds)))
+bornsup
+?sd
+sqrt(length(cham_pds$pds))
+cham_pds <- cham_pds%>%
+  filter(pds<=22.11812&pds>=20.0376)
+
+plot18 <- ggplot(cham_pds, aes(x=AgePds, y=pds)) + 
+    geom_point(color="blue", fill=rgb(0.1,0.4,0.5,0.7)) + 
+    geom_smooth();plot18
+```
+
+### Représentation graphique de la fecondite totale en fonction du poids
+
+```{r message=FALSE, warning=FALSE}
+plot19 <- ggplot(cham_pds, aes(x=pds, y=feconditetotale)) + 
+    geom_point(color="blue", fill=rgb(0.1,0.4,0.5,0.7)) + 
+    geom_smooth();plot19
+```
+
+### Représentation graphique de la longevite en fonction du poids
+
+```{r message=FALSE, warning=FALSE}
+plot20 <- ggplot(cham_pds, aes(x=pds, y=long)) + 
+    geom_point(color="blue", fill=rgb(0.1,0.4,0.5,0.7)) + 
+    geom_smooth();plot20
+```
+
+## Analyse statistique du lien entre fecondite annuelle/longevite et poids des femelles 
+### Modèles de régression lineaire generalise avec effets aléatoires {.tabset .tabset-fade .tabset-pills}
+
+***
+
+#### First
+```{r}
+lm14 <- lm(feconditetotale ~ pds,data=cham_pds)
 summary(lm14)
-```
 
-```{r message=FALSE, warning=FALSE}
-plot16 <- ggplot(cham_id3, aes(x=AgePds, y=pds)) + 
-    geom_point(color="blue", fill=rgb(0.1,0.4,0.5,0.7)) + 
-    geom_smooth();plot16
-```
-
-```{r}
-lm15 <- lm(feconditetotale ~ pds,data=cham_id3)
+lm15 <- lm(long ~ pds,data=cham_pds)
 summary(lm15)
 ```
+
+Impact de la longevite significatif sur le poids mais pas de la fecondite totale.
