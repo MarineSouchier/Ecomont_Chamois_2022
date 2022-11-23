@@ -5,6 +5,10 @@ output:
   rmdformats::readthedown:
     highlight: kate
     number_sections: TRUE
+    tableOfContents: {
+      minHeadingLevel: 3,
+      maxHeadingLevel: 5,
+    }
     df_print: kable
     
 ---
@@ -52,28 +56,32 @@ describe(cham)
 ```
 
 
-### Histogramme années d'observation
+### Histogramme nombre d'individus par année
 
 ```{r, echo=FALSE}
-hist(cham$year, breaks = 27)
+plot11 <- ggplot(cham, aes(x=year)) +
+    geom_bar()+
+     labs(title = "Nombre d'individus suivis chaque année",x="Année") +
+    theme(plot.title = element_text(hjust = 0.5)); plot11
 ```
 
-### Histogramme individus suivis
+
+### Histogramme nombre d'années de suivi
 
 ```{r, echo=FALSE}
-hist(table(cham$id), breaks=16, xlim=c(0,16), ylim=c(0,40))
+hist(table(cham$id), breaks=16, xlim=c(0,16), ylim=c(0,40), xlab = "Nombre années de suivi", main="Nombre individus en fonction du nombre d'années de suivi")
 ```
 
 ### Présentation des données
 
-Le data frame est constitué de 7 variables et 1328 observations.
+Le jeu de données est constitué de 7 variables et 1328 observations.
 Chaque observation correspond à l'information de fécondité associée à une femelle chamois et relative à une année donnée.
-Le jeu de données résume les suivis réalisés entre 1991 et 2017 sur 27 années. D'après l'histogramme des années d'observation, les années entre 2004 et 2006 sont les années pour lesquelles le nombre de chamois suivis a été le plus important (cf histogramme années d'observation). 217 femelles chamois ont été suivies au total. Le nombre d'années de suivi varie selon les femelles entre 1 et 16 années (cf histogramme individus suivis).
+Le jeu de données résume les suivis réalisés entre 1991 et 2017 sur 27 années. D'après l'histogramme présentant le nombre d'individus suivis chaque année, les années entre 2004 et 2006 sont les années pour lesquelles le nombre de chamois suivis a été le plus important. 217 femelles chamois ont été suivies au total. Le nombre d'années de suivi varie selon les femelles entre 1 et 16 années (cf histogramme nombre d'années de suivi).
 
 ## Prétraitement du jeu de données
 ### Elimination des données aberrantes
 
-Les chamois observés après leur mort ou avant leur naissance sont retirés du jeu de donnees.
+Les chamois observés après leur mort ou avant leur naissance sont retirés du jeu de données.
 
 ```{r}
 cham <- cham %>% 
@@ -81,8 +89,7 @@ cham <- cham %>%
   filter(year>=coh)
 ```
 
-
-### Création des variables âge (age) et longévité (long)
+### Création des variables âge (age),longévité (long) et âge au moment du marquage (agemark)
 
 ```{r}
 cham2 <- cham %>%
@@ -103,7 +110,7 @@ cham_age$fecmean <- round(cham_age$fecmean, 2)
 
   plot1 <- ggplot(cham_age, aes(x=age, y=fecmean)) + 
     geom_bar(color="blue", fill=rgb(0.1,0.4,0.5,0.7), stat = "identity") + 
-    labs(title = "Fécondité moyenne de la population en fonction de l'age",x="Age", y="Fécondité moyenne de la population") + 
+    labs(title = "Fécondité moyenne de la population en fonction de l'âge",x="Age", y="Fécondité moyenne de la population") + 
     theme(plot.title = element_text(hjust = 0.5)) + 
     geom_smooth()
 ggplotly(plot1)
@@ -116,7 +123,7 @@ ggplotly(plot1)
 ```{r message=FALSE, warning=FALSE, echo=FALSE}
 plot2 <- ggplot(cham2, aes(x=age, y=fec)) + 
     geom_jitter(width = 0.55, height = 0) + 
-    labs(title = "Fécondité annuelle en fonction de l'age",x="Age", y="Fécondité annuelle") +
+    labs(title = "Fécondité annuelle en fonction de l'âge",x="Age", y="Fécondité annuelle") +
     theme(plot.title = element_text(hjust = 0.5)) + 
     geom_smooth()
 ggplotly(plot2)
@@ -128,7 +135,7 @@ ggplotly(plot2)
 ```{r message=FALSE, warning=FALSE, echo=FALSE}
 plot3 <- ggplot(cham2, aes(x=age, y=fec)) +
     geom_count() + 
-    labs(title = "Fécondité annuelle en fonction de l'age",x="Age", y="Fécondité annuelle")+
+    labs(title = "Fécondité annuelle en fonction de l'âge",x="Age", y="Fécondité annuelle")+
     theme(plot.title = element_text(hjust = 0.5))+
     geom_smooth(); plot3
 ```
@@ -136,79 +143,78 @@ plot3 <- ggplot(cham2, aes(x=age, y=fec)) +
 Graphiquement, une augmentation de l'âge des chamois semble engendrer une diminution de la fécondité des chamois avec une inflexion de la courbe observée autour de 10 ans.
 
 ## Analyse statistique du lien entre fécondité annuelle et l'âge des femelles 
-### Modèles de régression lineaire generalisé avec effets aléatoires {.tabset .tabset-fade .tabset-pills}
+### Modèles de régression linéaire généralisé avec effets aléatoires {.tabset .tabset-fade .tabset-pills}
 
 ***
 
-#### Premier modèle testé
+#### Premier modèle testé glm1
 
-Le premier modèle appliqué est un modèle glm qui utilise la fonction de lien binomial afin de prendre en compte le fait que la variable réponse soit une variable binomiale. La variable "id" est désignée comme variable aléatoire pour prendre en compte le fait que les observations sont répetées sur les mêmes individus sur plusieurs années.
+Le premier modèle appliqué est un modèle glm qui utilise la fonction de lien binomial afin de prendre en compte le fait que la variable réponse soit une variable binomiale. La variable "id" est désignée comme variable aléatoire pour tenir compte du fait que les observations sont répétées sur les mêmes individus sur plusieurs années.
 
 ```{r, echo=FALSE}
 glm1 <- glmer(fec ~ age + (1| id),data=cham2, family = binomial)
 summary(glm1)
-Anova(glm1)
 ```
 
-Interpretation des coefficients:
-```{r, echo=FALSE}
+Interprétation des coefficients:
+```{r, echo=FALSE, include=FALSE}
 dispersion_glm1 <- 1756/1314;dispersion_glm1 #Surdispersion = deviance/df
 summary(glm1)$coefficients
 exp(summary(glm1)$coefficients[2])
-Coeff <-((1/exp(summary(glm1)$coefficients[2]))-1)*100
+Coeff <-round(((1/exp(summary(glm1)$coefficients[2]))-1)*100, 3)
 ```
 
-L'AIC de ce modèle est de 1736.
-Avec ce modele, la dispersion calculée comme le ratio variance/df est de 1.3 donc il n'y a pas de surdispersion observee.
+L'AIC de ce modèle est de 1762.
+Avec ce modèle, la dispersion calculée comme le ratio variance/df est de 1.3 donc il n'y a pas de surdispersion observée.
 On calcule en utilisant la fonction inverse de logit le coefficient qui permet d'exprimer la fécondité annuelle (en prenant en compte la fonction de lien) en fonction de l'âge.
-Il est `r Coeff`% moins vraisemblable que les chamois aient un petit lorsque leur âge augmente d'un an mais la p value est de 0.25 donc l'impact de l'âge via ce premier modèle n'est pas significatif.
+Il est `r Coeff`% moins vraisemblable que les chamois aient un petit lorsque leur âge augmente d'un an mais la p value est de 0.25 donc l'impact de l'âge sur la fécondité annuelle via ce premier modèle n'est pas significatif.
 
 
-#### Second modèle testé
+#### Second modèle testé glm1q
 
 Un modèle quadratique est testé par la suite pour prendre en compte la tendance de la ligne de régression observée sur les graphiques qui présente une inflexion autour de 10 ans.
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 glm1q <- glmer(fec ~ age + I(age^2) + (1| id),data=cham2, family = binomial)
 summary(glm1q)
 ```
 
-La variable age est centrée normée car le modèle n'arrive pas à converger.
+La variable âge est centrée normée car le modèle n'arrive pas à converger.
 
 ```{r, echo=FALSE}
 age_scale <- scale(cham2$age, center=TRUE, scale=TRUE)
 glm1q <- glmer(fec ~ age_scale + I(age_scale^2) + (1| id),data=cham2, family = binomial)
 summary(glm1q)
 ```
-Interpretation des coefficients:
-```{r, echo=FALSE}
+Interprétation des coefficients:
+```{r, echo=FALSE, include=FALSE}
 dispersion_glm1q <- 1666/1313;dispersion_glm1q #Surdispersion = deviance/df
 summary(glm1q)$coefficients
 ```
 L'AIC de ce modèle est de 1674.
 Avec ce modèle, la dispersion calculée est de 1.3 donc il n'y a pas de surdispersion observée.
-L'AIC de ce modèle 2 quadratique < l'AIC du modèle 1 linéaire donc le modèle quadratique est plus adapté comme attendu graphiquement. 
-Une observation des coefficients associés aux termes âge et âge^2 indique que le terme "âge" n'est pas significatif dans la prédiction de la variable réponse alors que la p value associée au terme "âge^2" < 0.01. La fonction carré est donc testée.
+L'AIC de ce modèle quadratique < l'AIC du modèle glm1 linéaire donc le modèle quadratique est plus adapté comme attendu graphiquement. 
+Une observation des coefficients associés aux termes âge et âge^2 indique que le terme "âge" n'est pas significatif dans la prédiction de la variable réponse (p value = 0.16) alors que la p value associée au terme "âge^2" < 0.01. La fonction carré est donc testée.
 
-#### Troisième modèle testé
+#### Troisième modèle testé glm1c
 
 ```{r, echo=FALSE}
 glm1c <- glmer(fec ~  I(age_scale^2) + (1| id),data=cham2, family = binomial)
 summary(glm1c)
 ```
-Interpretation des coefficients:
-```{r,echo=FALSE}
+Interprétation des coefficients:
+```{r,echo=FALSE, include=FALSE}
 dispersion_glm1c <- 1668/1314;dispersion_glm1c #Surdispersion = deviance/df
 summary(glm1c)$coefficients
 exp(summary(glm1c)$coefficients[[2]])
-Coeffb <- ((1/exp(summary(glm1)$coefficients[2]))-1)*100
+Coeffb <- round(((1/exp(summary(glm1c)$coefficients[2]))-1)*100, 3)
 ```
 L'AIC de ce modèle est de 1674.
 Avec ce modèle, la dispersion calculée est 1.3 donc il n'y a pas de surdispersion observée.
-Il est `r Coeffb`% moins vraisemblable que les chamois aient un petit lorsque leur âge au carré augmente d'une unité (p value < 0.05).
+Il est `r Coeffb`% moins vraisemblable que les chamois aient un petit lorsque l'âge augmente d'une unité puis qu'on applique la fonction carré (p value < 0.05).
 
 
-#### 4ème modèle testé
+#### 4ème modèle testé glm1d
 
 On rajoute la variable "year" comme variable aléatoire pour prendre également en compte le fait que les mêmes individus ont été suivis sur les mêmes années.
 
@@ -216,24 +222,27 @@ On rajoute la variable "year" comme variable aléatoire pour prendre également 
 glm1d <- glmer(fec ~  I(age_scale^2) + (1| id)+ (1| year),data=cham2, family = binomial)
 summary(glm1d)
 ```
-Interpretation des coefficients:
-```{r, echo=FALSE}
+Interprétation des coefficients:
+```{r, echo=FALSE, include=FALSE}
 dispersion_glm1d <- 1633/1313;dispersion_glm1d #Surdispersion = deviance/df
+summary(glm1d)$coefficients
+exp(summary(glm1d)$coefficients[[2]])
+Coeffc <- round(((1/(exp(summary(glm1d)$coefficients[2]))-1)*100), 3)
 ```
 L'AIC de ce modèle est de 1641.
-Avec ce modèle, la dispersion calculée est de 1.2 donc il n'y a pas de surdispersion observée.
+Avec ce modèle, la dispersion calculée est de 1.2 donc il n'y a pas de surdispersion observée. Il est `r Coeffc`% moins vraisemblable que les chamois aient un petit lorsque l'âge augmente d'une unité puis qu'on applique la fonction carré (p value < 0.05).
 
 ### Conclusions
-```{r}
+```{r, echo=FALSE}
 anova(glm1, glm1q, glm1c, glm1d)
 ```
 Le modèle glm1d présente le plus faible AIC.
-La variable "âge" présente un effet significatif sur la fécondité annuelle via ce modèle ce qui n'est pas surprenant car graphiquement la ligne de régression présentait une courbe avec une diminution de la fécondité pour des âges élevés.
+La variable "âge" a un effet significatif sur la fécondité annuelle via ce modèle ce qui n'est pas surprenant car graphiquement la ligne de régression présentait une courbe avec une diminution de la fécondité pour des âges élevés.
 
 
 
 
-# Variation de la fécondité annuelle en fonction du temps
+# Question 2 : Variation de la fécondité annuelle en fonction du temps
 ***
 ## Représentation graphique des données
 ### Représentation graphique par année
@@ -261,7 +270,7 @@ plot5 <- ggplot(data = cham_ans, aes(x = year,y=agemoyen))+
     geom_smooth(); plot5
 ```
 
-### Représentation graphique sans grouper par annee
+### Représentation graphique sans grouper par année
 
 ```{r out.width=c('33%', '33%', '33%'), fig.show='hold', message=FALSE, warning=FALSE, echo=FALSE}
 plot6 <- ggplot(cham2, aes(x=year, y=fec)) + 
@@ -285,15 +294,13 @@ plot8 <- ggplot(data = cham_ans, aes(x = year,y=agemoyen))+
 Graphiquement, la variable âge ne semble pas avoir d'effet sur la fécondité annuelle des chamois malgré le fait que l'âge moyen de la population augmente sensiblement avec les années.
 
 ## Analyse statistique du lien entre fécondité annuelle et années
-### Modèles de régression lineaire generalisé avec effets aléatoires {.tabset .tabset-fade .tabset-pills}
+### Modèles de régression linéaire généralisé avec effets aléatoires
 
 ***
 
-#### Premier modèle
+Le premier modèle appliqué est un modèle glm qui utilise la fonction de lien binomial afin de prendre en compte le fait que la variable réponse soit une variable binomiale. La variable "id" est désignée comme variable aléatoire pour tenir compte du fait que les observations sont répétées sur les mêmes individus sur plusieurs années. Afin que le modèle converge, la variable "année" est centrée normée.
 
-Le premier modèle appliqué est un modèle glm qui utilise la fonction de lien binomial afin de prendre en compte le fait que la variable réponse soit une variable binomiale. La variable "id" est désignée comme variable aléatoire pour prendre en compte le fait que les observations sont répetées sur les mêmes individus sur plusieurs années. 
-
-```{r, echo=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 glm5 <- glmer(fec ~ year + (1| id),data=cham2, family = binomial)
 year_scale <-scale(cham2$year, center = TRUE, scale=TRUE)
 
@@ -301,84 +308,98 @@ glm5 <- glmer(fec ~ year_scale + (1| id),data=cham2, family = binomial)
 summary(glm5)
 ```
 
-Interpretation des coefficients:
-```{r, echo=FALSE}
+Interprétation des coefficients:
+```{r, echo=FALSE, include=FALSE}
 dispersion_glm5 <- 1757/1314;dispersion_glm5 #Surdispersion = deviance/df
 ```
 L'AIC de ce modèle est de 1763.
 Avec ce modèle, la dispersion calculée comme le ratio variance/df est de 1.3 donc il n'y a pas de surdispersion observée.
 D'après la p-value > 0.82, il n'y a pas d'effets significatifs de la variable "year" sur la fécondité annuelle comme supposé préalablement par les représentations graphiques.
-La variable "âge" n'ayant pas d'effets significatifs sur la fécondité annuelle des chamois, il n'y a pas d'utilité à appliquer des modèles avec effets additifs ou multiplicatifs en utilisant les variables âge et année.
+La variable "âge" n'ayant pas d'effets significatifs sur la fécondité annuelle des chamois, il n'y a pas d'utilité à tester des modèles avec effets additifs ou multiplicatifs en utilisant la variable année.
 
 
-# Lien entre fecondite totale et longevite des animaux
+# Question 3 : Lien entre fécondité totale et longévité des animaux
 ***
 ## Représentation graphique des données
-### Représentation sans prendre en compte le nombre d'annees de suivi
+### Représentation sans prendre en compte le nombre d'années de suivi
 
 
-```{r message=FALSE, warning=FALSE}
+```{r message=FALSE, warning=FALSE, echo=FALSE}
 cham_id = cham2 %>% 
   group_by(id) %>% 
-  dplyr::summarise(feconditetotale= sum(fec), long=long, pds=pds, coh=coh, anneetot=(ydth-min(year)+1), MinAn=min(year), MaxAn=max(year), AgeMark=min(age)) %>%
+  dplyr::summarise(feconditetotale= sum(fec), long=long, pds=pds, coh=coh, anneetot=(ydth-min(year)+1), minan=min(year), maxan=max(year), agemark=min(age)) %>%
   unique()%>%
   drop_na(long)
 ```
 
-```{r out.width=c('50%', '50%'), fig.show='hold', message=FALSE, warning=FALSE}
+```{r out.width=c('50%', '50%'), fig.show='hold', message=FALSE, warning=FALSE, echo=FALSE}
 plot9 <-ggplot(cham_id, aes(x=long, y=feconditetotale)) +
     geom_count() +
-    labs(title = "Fecondite totale en fonction de la longevite",x="Longevite", y="Fecondite totale") +
+    labs(title = "Fécondité totale en fonction de la longévité",x="Longévité", y="Fécondité totale") +
     theme(plot.title = element_text(hjust = 0.5)) +
     geom_smooth(); plot9
 
 plot10 <- ggplot(cham_id, aes(x=long, y=feconditetotale)) +
     geom_jitter(width = 0.25, height = 0.25)+
-     labs(title = "Fecondite totale en fonction de la longevite",x="Longevite", y="Fecondite totale") +
+     labs(title = "Fécondité totale en fonction de la longévité",x="Longévité", y="Fécondité totale") +
     theme(plot.title = element_text(hjust = 0.5)) +
     geom_smooth(); plot10
 ```
+
+
 ### Prise en compte du biais apporté par le nombre d'années de suivi
 
-Tous les chamois n'ont pas été marqués au même age et donc n'ont pas été suivis le même nombre d'annee comme le montre l'histogramme ci-dessous. 
+Tous les chamois n'ont pas été marqués au même âge et donc n'ont pas été suivis le même nombre d'année comme le montre l'histogramme ci-dessous. 
 
-```{r message=FALSE, warning=FALSE}
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
 plot11 <- ggplot(cham_id, aes(x=anneetot)) +
     geom_histogram(bins = 30)+
-     labs(title = "Nombre annees de suivi des chamois",x="Nombre d'annees") +
+     labs(title = "Nombre années de suivi des chamois",x="Nombre d'années") +
     theme(plot.title = element_text(hjust = 0.5)); plot11
-plot(jitter(cham_id$long), jitter(cham_id$anneetot))
 ```
-Le nombre d'annees de suivi n'est donc pas égal à la longévité des individus comme illustré par le graphique ci-dessous.
-```{r message=FALSE, warning=FALSE}
+
+
+Le nombre d'années de suivi n'est donc pas égal à la longévité des individus comme illustré par le graphique ci-dessous.
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
 plot5 <- ggplot(data = cham_id, aes(x = anneetot,y=long))+
-     labs(title = "Correlation entre le nombre d'annees de suivi et la longevite",x="Annees de suivi", y="Longevite") +
+     labs(title = "Corrélation entre le nombre d'années de suivi et la longévité",x="Années de suivi", y="Longévité") +
     theme(plot.title = element_text(hjust = 0.5)) +
-    geom_point()+
+    geom_jitter(width = 0.5, height = 0.5)+
     geom_smooth(); plot5
 ```
-On vérifie dans un premier temps, l'impact du nombre d'annees de suivi sur la fecondite totale des chamois
 
-```{r out.width=c('50%','50%'), fig.show='hold',message=FALSE, warning=FALSE}
+
+Dans un premier temps, l'impact du nombre d'années de suivi sur la fécondité totale des chamois est vérifié.
+<br/>
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
 plot10bis <- ggplot(cham_id, aes(x=anneetot, y=feconditetotale)) +
     geom_point(stat="identity") +
-    labs(title = "Fecondite totale en fonction du nombre d'annee de suivi",x="Nombre annees de suivi", y="Fecondite totale") +
+    labs(title = "Fécondité totale en fonction du nombre d'années de suivi",x="Nombre années de suivi", y="Fécondité totale") +
     theme(plot.title = element_text(hjust = 0.5)) +
     geom_smooth(); plot10bis
 ```
-Comme attendu, la fecondite totale augmente avec le nombre d'annees de suivi. Or il est difficile de savoir si cette augmentation est du au fait que l'individu a été marqué précocement ou si l'individu a vécu plus longtemps.
+
+
+
+Comme attendu, la fécondité totale augmente avec le nombre d'années de suivi. Or, il est difficile de savoir si la période plus longue de suivi est due au fait que l'individu ait été marqué précocement ou que l'individu a vécu plus longtemps.
 
 Pour pouvoir répondre à la question initiale, qui consiste à vérifier s'il y a un lien entre la fécondité annuelle et la longévité, il faut pouvoir comparer des individus suivis sur le même nombre d'année et si possible sur le maximum d'années possibles.
 
-```{r message=FALSE, warning=FALSE}
-plot11 <- ggplot(cham_id, aes(x=AgeMark)) +
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+plot11 <- ggplot(cham_id, aes(x=agemark)) +
     geom_histogram(bins=50)+
      labs(title = "Age de marquage des individus",x="Age") +
     theme(plot.title = element_text(hjust = 0.5)); plot11
 ```
-En s'appuyant sur le graphique ci-dessous, l'analyse statistique va être réalisé sur un échantillon de la population suivi à savoir tous les individus marqués à 3 ans qui constitue un échantillon > 30 individus et peut permettre d'étudier l'impact de la longévité sur la fécondité totale.
 
-On sait que la variable "année" n'a pas d'impact sur la fécondité annuelle des chamois donc le faut que les chamois aient été suivis pendant des périodes différentes n'a pas d'impact. Il faut par contre vérifier au préalable que le fait de sélectionner la fécondité de la population des individus marqués à 3 ans est représentative de la population totale de chamois. 
+En s'appuyant sur le graphique ci-dessous, l'analyse statistique va être réalisée sur un échantillon de la population suivie à savoir tous les individus marqués à 3 ans qui constituent un échantillon > 30 individus et peut permettre d'étudier l'impact de la longévité sur la fécondité totale.
+
+On sait que la variable "année" n'a pas d'impact sur la fécondité annuelle des chamois donc le fait que les chamois aient été suivis pendant des périodes différentes n'a pas d'impact. Il faut par contre vérifier au préalable que le fait d'étudier la fécondité de la population des individus marqués à 3 ans est représentatif de la population totale de chamois. 
 
 ```{r}
 r <- tapply(cham2$fec, cham2$agemark, mean)
@@ -395,27 +416,27 @@ mean(Ageautre$fec)
 
 ```{r}
 cham3 <- cham_id %>% 
-  filter(AgeMark==3)
+  filter(agemark==3)
 ```
 
-### Représentation graphique
+### Représentation graphique de la sous-population
 
-```{r, fig.show='hold', message=FALSE, warning=FALSE}
+```{r, fig.show='hold', message=FALSE, warning=FALSE, echo=FALSE}
 plot9 <-ggplot(cham3, aes(x=long, y=feconditetotale)) +
     geom_point() +
-    labs(title = "Fecondite totale en fonction de la longevite",x="Longevite", y="Fecondite totale") +
+    labs(title = "Fécondité totale en fonction de la longévité",x="Longévité", y="Fécondité totale") +
     theme(plot.title = element_text(hjust = 0.5)) +
     geom_smooth(); plot9
 ```
 
-## Analyse statistique du lien entre la fécondité annuelle et la longevite
-### Tests de modèles de régression lineaire generalise avec effets aléatoires {.tabset .tabset-fade .tabset-pills}
+## Analyse statistique du lien entre la fécondité annuelle et la longévité
+### Tests de modèles de régression lineaire généralisé avec effets aléatoires {.tabset .tabset-fade .tabset-pills}
 
 ***
 
 #### First
 
-Plusieurs modèles ont été testés => voir avec Karim
+Plusieurs modèles ont été testés => voir avec . Est ce qu'une somme de variables binaires = loi de poisson? Besoin d'une glm ici?
 
 ```{r}
 lm1 <-lm(feconditetotale~long, data = cham3)
@@ -442,93 +463,93 @@ plot(lm2)
 
 
 
-# Lien entre fecondite annuelle et longevite des animaux
+# Question 4: Lien entre fécondité annuelle et longévité des animaux
 ***
 
 ## Représentation graphique des données
 
 
-```{r message=FALSE, warning=FALSE}
+```{r message=FALSE, warning=FALSE, echo=FALSE}
 plot12 <- ggplot(cham2, aes(x=long, y=fec)) +
     geom_count() + 
-    labs(title = "Fécondité annuelle en fonction de la longevite",x="Longevite", y="Fécondité annuelle")+
+    labs(title = "Fécondité annuelle en fonction de la longévité",x="Longévité", y="Fécondité annuelle")+
     geom_smooth()+
     theme(plot.title = element_text(hjust = 0.5)); plot12
 ```
 
-```{r message=FALSE, warning=FALSE}
+```{r message=FALSE, warning=FALSE, echo=FALSE}
 plot13 <- ggplot(cham2, aes(x=long, y=fec)) +
     geom_jitter(width = 0.55, height=0) + 
-    labs(title = "Fécondité annuelle en fonction de la longevite",x="Longevite", y="Fécondité annuelle")+
+    labs(title = "Fécondité annuelle en fonction de la longévité",x="Longévité", y="Fécondité annuelle")+
     geom_smooth()+
     theme(plot.title = element_text(hjust = 0.5)); plot13
 ```
 
-L'allure concave des lignes de régression illustre une augmentation de la fécondité annuelle avec la longévité jusqu'à atteindre un maximum autour de 13-14 ans puis une diminution de la fécondité annuelle.
+L'allure concave des lignes de régression illustre une augmentation de la fécondité annuelle avec la longévité jusqu'à atteindre un maximum autour de 13-14 ans puis une diminution de la fécondité annuelle lorsque la longévité est > 14 ans.
 
-## Analyse statistique du lien entre fecondite annuelle et longevite des femelles 
-### Modèles de régression lineaire generalise avec effets aléatoires {.tabset .tabset-fade .tabset-pills}
+## Analyse statistique du lien entre fécondité annuelle et longévité des femelles 
+### Modèles de régression lineaire généralisé avec effets aléatoires {.tabset .tabset-fade .tabset-pills}
 
 ***
 
-#### First
+#### Premier modèle
 
-Le premier modele applique est un modele glm qui utilise la fonction de lien binomiale afin de prendre en compte le fait que la variable réponse soit une variable binomiale. La variable "id" est désignée comme variable aléatoire pour prendre en compte le fait que les observations sont repetees sur les mêmes individus sur plusieurs annees.
+Le premier modèle appliqué est un modèle glm qui utilise la fonction de lien binomial afin de prendre en compte le fait que la variable réponse soit une variable binomiale. La variable "id" est désignée comme variable aléatoire pour tenir compte du fait que les observations sont répetées sur les mêmes individus sur plusieurs années.
 
-```{r}
+```{r, echo=FALSE}
 glm11 <- glmer(fec ~ long + (1| id),data=cham2, family = binomial)
 long_scale <- scale(x = cham2$long,center = TRUE,scale = TRUE)
 glm11 <- glmer(fec ~ long_scale + (1| id),data=cham2, family = binomial)
 summary(glm11)
-Anova(glm11)
 ```
 
-Interpretation des coefficients:
-```{r}
-dispersion_glm1 <- 1212/906;dispersion_glm1 #Surdispersion = deviance/df
+Interprétation des coefficients:
+```{r, echo=FALSE, include=FALSE}
+dispersion_glm11 <- 1212/906;dispersion_glm11 #Surdispersion = deviance/df
 ```
 L'AIC de ce modèle = 1218.
-Avec ce modele, la dispersion calculée comme le ratio variance/df = 1.3 donc il n'y a pas de surdispersion observee.
-Avec ce modele, la p value associé à l'impact de la varibale "longevite" sur la fecondite annuelle est de 0.6 donc l'effet de la longevite sur la variable reponse n'est pas significatif. 
+Avec ce modèle, la dispersion calculée comme le ratio variance/df est de 1.3 donc il n'y a pas de surdispersion observée.
+Avec ce modèle, la p value associé à l'impact de la variable "longévité" sur la fécondité annuelle est de 0.6 donc l'effet de la longévité sur la variable réponse n'est pas significatif. 
 
-#### Second 
+#### Second modèle
 
-On applique un modèle quadratique pour prendre en compte la tendance la ligne de régression observee sur les graphiques qui présente une inflexion autour de 13-14 ans.
-```{r}
+On applique un modèle quadratique pour prendre en compte la tendance de la ligne de régression observée sur les graphiques qui présente une inflexion autour de 13-14 ans.
+```{r, echo=FALSE}
 glm11 <- glmer(fec ~ long_scale + I(long_scale^2)+ (1| id),data=cham2, family = binomial)
 summary(glm11)
-Anova(glm11)
 ```
-Interpretation des coefficients:
-```{r}
+Interprétation des coefficients:
+```{r, echo=FALSE, include=FALSE}
 dispersion_glm1 <- 1201/905;dispersion_glm1 #Surdispersion = deviance/df
 ```
 
-L'AIC de ce modèle glm1q = 1209.
-Avec le modele glm1q, la dispersion calculée = 1.3 donc il n'y a pas de surdispersion observee.
-L'AIC de ce modèle glm1q < l'AIC du modèle glm1 donc le modèle glm1q est plus adapté. 
-Une observation des coefficients indique que le terme "x" n'est pas significatif dans la prediction de la variable reponse alors que la p value associée au terme "x2" < 0.01. La fonction carré est donc testée.
+L'AIC de ce modèle est de 1209.
+Avec ce modèle, la dispersion calculée est de 1.3 donc il n'y a pas de surdispersion observée.
+L'AIC de ce modèle quadratique < l'AIC du modèle linéaire donc le modèle quadratique est plus adapté. 
+Une observation des coefficients associés aux termes longévité et longévité^2 indique que le terme "longévité" n'est pas significatif dans la prédiction de la variable réponse (p value = 0.71) alors que la p value associée au terme "longévité^2" < 0.01. La fonction carré est donc testée.
 
-#### Third
 
-```{r}
+#### Troisième modèle
+
+```{r, echo=FALSE}
 glm11 <- glmer(fec ~ I(long_scale^2)+ (1| id),data=cham2, family = binomial)
 summary(glm11)
-Anova(glm11)
 ```
 
-Interpretation des coefficients:
-```{r}
+Interprétation des coefficients:
+```{r, echo=FALSE, include=FALSE}
 dispersion_glm1c <- 1201/906;dispersion_glm1c #Surdispersion = deviance/df
 summary(glm11)$coefficients
 exp(summary(glm11)$coefficients[[2]])
-Coeffb <- ((1/exp(summary(glm11)$coefficients[2]))-1)*100
+Coeffb <- round(((1/exp(summary(glm11)$coefficients[2]))-1)*100, 3)
 ```
-L'AIC de ce modèle glm1c = 1674.
-Avec le modele glm1c, la dispersion calculée = 1.3 donc il n'y a pas de surdispersion observee.
-Il est `r Coeffb`% moins vraisemblable que les chamois aient un petit lorsque leur longevite au carré augmente d'une unité (p value < 0.05).
+L'AIC de ce modèle est de 1207.
+Avec ce modèle, la dispersion calculée est 1.3 donc il n'y a pas de surdispersion observée.
+Il est `r Coeffb`% moins vraisemblable que les chamois aient un petit lorsque la longévité augmente d'une unité puis qu'on applique la fonction carré (p value < 0.01).
 
 
+
+***
 Segmentation => voir avec Karim
 ```{r}
 cham_long1 <- cham2[cham2$long<15,]
@@ -556,44 +577,64 @@ Anova(glm13)
 ```
 
 
+### Conclusions
+
+#Ajouter l'anova#
+Le modèle avec la fonction carré présente le plus faible AIC.
+La variable "longévité" a un effet significatif sur la fécondité annuelle via ce modèle ce qui n'est pas surprenant car graphiquement la ligne de régression présentait une courbe avec une diminution de la fécondité pour des longévités élevées.
 
 
-
-
-# Lien entre fecondite totale et poids
+# Question 5: Lien entre fécondite totale et poids
 ***
 
 ## Représentation graphique des données
-### Vérification de la comparabilite des poids selon les ages de capture
+### Vérification de la comparabilité des poids selon les âges de capture et élimination des valeurs outliers
 
 ```{r message=FALSE, warning=FALSE}
 cham_pds <- cham_id %>% 
   drop_na(pds)
 ```
 
-```{r message=FALSE, warning=FALSE}
-plot18 <- ggplot(cham_pds, aes(x=AgeMark, y=pds)) + 
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+plot18 <- ggplot(cham_pds, aes(x=agemark, y=pds)) + 
     geom_point(color="blue", fill=rgb(0.1,0.4,0.5,0.7)) + 
     labs(title = "Poids selon l'age de capture",x="Age de capture", y="Poids mesuré")+
     theme(plot.title = element_text(hjust = 0.5))+
     geom_smooth();plot18
+```
 
-#Fiare une boucle for pour exclure outlier
+Des valeurs éloignées de la moyenne sont observées. Les outliers sont exclus via une boucle "which".
+
+```{r out.width=c('33%', '33%', '33%'), fig.show='hold', message=FALSE, warning=FALSE}
+out=NA
+
+while (length(out)>0) {
 (boxplot(cham_pds$pds))
 out <- boxplot.stats(cham_pds$pds)$out
-max(out)
 cham_pds <- cham_pds%>%
   filter(pds>max(out))
 
-hist(cham_pds$AgeMark)
-plot(cham_pds$pds, cham_pds$feconditetotale)
-plot(cham_pds$AgeMark, cham_pds$feconditetotale)
+}
 ```
-Reflechir à la section des donnes avant analyse stat pour fecondite totale
 
+Comment faire les mesures stats avec populations comparables??=> voir avec Karim
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+hist(cham_pds$agemark)
+plot(cham_pds$pds, cham_pds$feconditetotale)
+plot(cham_pds$agemark, cham_pds$feconditetotale)
+```
 
-## Analyse statistique du lien entre fecondite annuelle/longevite et poids des femelles 
-### Modèles de régression lineaire generalise avec effets aléatoires {.tabset .tabset-fade .tabset-pills}
+### Représentation graphique de la fécondité totale en fonction du poids
+
+```{r message=FALSE, warning=FALSE}
+plot19 <- ggplot(cham_pds, aes(x=pds, y=feconditetotale)) + 
+    geom_point(color="blue", fill=rgb(0.1,0.4,0.5,0.7)) + 
+  
+    geom_smooth();plot19
+```
+
+## Analyse statistique du lien entre fécondite annuelle et poids des femelles 
+### Modèles de régression linéaire généralisé avec effets aléatoires {.tabset .tabset-fade .tabset-pills}
 
 ***
 
@@ -606,19 +647,46 @@ lm15 <- lm(long ~ pds,data=cham_pds)
 summary(lm15)
 ```
 
-### Représentation graphique de la fecondite totale en fonction du poids
 
-```{r message=FALSE, warning=FALSE}
-plot19 <- ggplot(cham_pds, aes(x=pds, y=feconditetotale)) + 
-    geom_point(color="blue", fill=rgb(0.1,0.4,0.5,0.7)) + 
-    geom_smooth();plot19
-```
+# Question 5: Lien entre longévité et poids
+***
 
-### Représentation graphique de la longevite en fonction du poids
+## Représentation graphique des données
+### Représentation graphique de la longévité en fonction du poids
 
-```{r message=FALSE, warning=FALSE}
+```{r message=FALSE, warning=FALSE, echo=FALSE}
 plot20 <- ggplot(cham_pds, aes(x=pds, y=long)) + 
     geom_point(color="blue", fill=rgb(0.1,0.4,0.5,0.7)) + 
+    labs(title = "Longévité des chamois en fonction du poids",x="Longévité", y="Poids des chamois")+
+    theme(plot.title = element_text(hjust = 0.5))+
     geom_smooth();plot20
 ```
-Longevite significatif sur le poids mais pas de la fecondite totale.
+
+## Analyse statistique du lien entre longévité et poids des femelles 
+### Modèles de régression linéaire généralisé avec effets aléatoires 
+
+
+```{r, echo=FALSE}
+hist(cham_pds$long)
+```
+
+La variable longévité semble présenter une distribution normale donc on applique un modèle linéaire lm.
+
+```{r, echo=FALSE}
+lm14 <- lm(long ~ pds,data=cham_pds)
+summary(lm14)
+plot(lm14)
+
+glm <- glm(long ~ pds,data=cham_pds)
+summary(glm)
+```
+
+Modèle glm pas nécessaire? => Karim
+
+Le modèle linéaire semble valider toutes les hypothèses requises: 
+  -Normalité des résidus validée
+  -Homoscédasticité des résidus validée
+  
+D'après le résumé du modèle, la longévité augmente de 0.56 années lorsque le poids augmente d'un kg (p value < 0.01). La poids semble donc avoir un impact sur la longévité et donc sur la fécondité totale puisque une augmentation de la longévité permet d'augmenter la fécondité totale.
+  
+  
